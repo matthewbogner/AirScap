@@ -167,6 +167,7 @@ Scanner discovery and startup settings are configured via environment variables.
 | `AIRSCAP_LISTEN_PORT` | `8080` | HTTP listen port | |
 | `AIRSCAP_DEVICE_NAME` | from scanner | mDNS display name | |
 | `AIRSCAP_LOG_LEVEL` | `info` | Log level (`debug` / `info` / `warn` / `error`) | |
+| `AIRSCAP_ROTATE_180` | `false` | Rotate every scanned page 180°, including both duplex sides | |
 | `AIRSCAP_DATA_DIR` | no persistence | Directory for persistent settings | \*\* |
 | `AIRSCAP_OCR_MODEL_DIR` | &mdash; | Path to OCR model directory | \*\*\* |
 | `AIRSCAP_OCR_DEVICE` | `cpu` | OCR inference device (`cpu` / `cuda`) | |
@@ -176,6 +177,67 @@ Scanner discovery and startup settings are configured via environment variables.
 \*\*\* When set, the OCR engine is enabled and can add transparent text layers to PDF output. Requires ONNX Runtime and ndlocr-lite model files.
 
 See [`dist/env.example`](dist/env.example) for a full template.
+
+### Scan orientation
+
+If pages are upside down when loaded as for the official ScanSnap software, start
+AirScap with `AIRSCAP_ROTATE_180=true`. This is a fixed correction, not automatic
+orientation detection. It applies before eSCL/AirScan output, Web UI preview, PDF
+generation (including OCR), and button/save jobs (local, FTP, and Paperless-ngx).
+Page order, front/back identifiers, pixel dimensions, and resolution are unchanged.
+Restart AirScap after changing the variable; it is not a Web UI setting.
+
+Accepted true values: `1`, `t`, `T`, `true`, `TRUE`, `True`; false values:
+`0`, `f`, `F`, `false`, `FALSE`, `False`. Unset/empty defaults to disabled;
+invalid values produce a warning and use the default. When disabled, image bytes
+pass through unchanged, without image decoding or re-encoding.
+
+Rotation is performed one page at a time, so streaming scans do not buffer the
+whole document. JPEGs are decoded, rotated without cropping, and re-encoded at
+quality 95 using Go's JPEG codec. **JPEG recompression is lossy**, may change file
+size, and overrides the original JPEG compression level for the resulting file.
+JFIF density and other JPEG APP/comment segments are retained. Embedded thumbnails,
+if present, are not regenerated. A coefficient-domain lossless JPEG transform is
+not provided by the existing codecs; adding one would require another dependency
+or executable, and partial MCU blocks need special edge handling.
+
+B&W TIFFs are rotated without pixel loss and re-encoded as 8-bit grayscale Deflate
+TIFF rather than CCITT G4. This may increase file size; clients must support Deflate
+TIFF. X/Y resolution and resolution units are retained; other auxiliary TIFF tags
+are not copied. Invalid image data fails the scan explicitly. Empty pages from
+scanner-side blank-page removal remain empty.
+
+#### Build and verify alongside an existing binary
+
+These commands leave an existing `./airscap` and system installation untouched:
+
+```bash
+CGO_ENABLED=0 go test -mod=vendor -overlay=build/overlay.json ./...
+CGO_ENABLED=0 go vet -mod=vendor -overlay=build/overlay.json ./...
+CGO_ENABLED=0 go build -mod=vendor -overlay=build/overlay.json -o ./airscap-rotate180 ./cmd/airscap/
+AIRSCAP_ROTATE_180=true AIRSCAP_SCANNER_IP=192.168.1.100 AIRSCAP_LISTEN_PORT=8081 AIRSCAP_DEVICE_NAME='ScanSnap rotation test' ./airscap-rotate180
+```
+
+Use your scanner IP and pairing credentials as needed. Do not connect the original
+and test AirScap processes (or the macOS ScanSnap software) to the scanner at the
+same time. An alternate HTTP port does not isolate scanner sessions or the button
+listener. Arrange for the existing process to be inactive before testing, without
+replacing its binary or editing its service configuration. To compare original
+behavior using the test binary, unset the variable or set it to `false`.
+
+Automated tests use synthetic images and a local fake scanner, not an iX500.
+Manual verification with the actual scanner is still required:
+
+1. Load two numbered, asymmetric sheets in the usual macOS orientation, marking
+   the top and front/back. Compare rotation disabled versus enabled.
+2. Check Web UI Scan & Preview and Skanpage/eSCL in simplex and duplex: all sides
+   upright, correct page order/count, unchanged dimensions and physical PDF size.
+3. Check color/grayscale JPEG, B&W TIFF, and PDF output at auto and fixed DPI.
+   Verify B&W TIFF opens in the intended client; compare fine text/image quality.
+4. Test button saves and configured FTP/Paperless-ngx destinations; if OCR is
+   enabled, check searchable PDF text aligns with the rotated image.
+5. Test a longer duplex stack, blank-page removal, and stopping an eSCL scan early
+   to confirm feeding/cancellation behavior remains unchanged.
 
 ## Verify
 
@@ -303,4 +365,3 @@ This software uses the following open-source libraries:
 | [Alpine.js](https://alpinejs.dev/) | MIT |
 | [Bulma](https://bulma.io/) | MIT |
 | [Feather Icons](https://feathericons.com/) | MIT |
-

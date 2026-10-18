@@ -54,8 +54,9 @@ var PaperDimensions = map[PaperSize]PaperDimension{
 	PaperPostcard:     {0x1280, 0x1B50}, // 100mm x 148mm
 }
 
-// ScanConfig holds scan parameters to send to the scanner.
+// ScanConfig holds scanner parameters and host-side image processing options.
 type ScanConfig struct {
+	Rotate180        bool // host-side rotation; not sent to the scanner
 	ColorMode        ColorMode
 	Quality          Quality
 	Duplex           bool

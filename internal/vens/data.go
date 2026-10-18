@@ -44,7 +44,7 @@ func (e *ScanError) Error() string { return e.Msg }
 type Page struct {
 	Sheet     int            // Physical sheet index (0-based)
 	Side      int            // 0=front, 1=back
-	JPEG      []byte         // Raw JPEG data
+	JPEG      []byte         // Image data (JPEG, or TIFF in B&W mode)
 	PixelSize *PixelSizeInfo // Actual pixel dimensions (nil if not queried)
 }
 
@@ -185,6 +185,7 @@ type ScanSession struct {
 	transferSheet int
 	sideIdx       int
 	done          bool
+	rotate180     bool
 }
 
 // StartScan begins a scan session (setup, config, prepare, status check,
@@ -306,6 +307,7 @@ func (d *DataChannel) StartScan(cfg ScanConfig) (*ScanSession, error) {
 		conn:          conn,
 		token:         d.token,
 		sidesPerSheet: sidesPerSheet,
+		rotate180:     cfg.Rotate180,
 	}, nil
 }
 
@@ -398,6 +400,17 @@ func (s *ScanSession) NextPage() (Page, error) {
 		slog.Warn("scanner error in sense data", "err", senseErr, "kind", senseErr.Kind)
 		s.done = true
 		return page, senseErr
+	}
+
+	// Process one page at a time, after completing its protocol exchange and
+	// before any streaming consumer, batch result, or callback sees the image.
+	// Empty images are the scanner's blank-page-removal sentinel.
+	if s.rotate180 && len(page.JPEG) > 0 {
+		page.JPEG, err = rotatePage180(page.JPEG)
+		if err != nil {
+			s.done = true
+			return Page{}, fmt.Errorf("rotate sheet %d side %d: %w", page.Sheet, page.Side, err)
+		}
 	}
 
 	// NOTE: READ_PIXELSIZE (SCSI READ DataType=0x80) is NOT sent here.

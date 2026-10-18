@@ -23,6 +23,7 @@ type Scanner struct {
 	control          *vens.ControlSession
 	heartbeat        *vens.Heartbeat
 	connected        bool
+	rotate180        bool
 	name             string
 	serial           string
 	deviceName       string           // full device name with manufacturer from TCP GET_SET sub=0x12
@@ -47,6 +48,13 @@ func New(host string, dataPort, controlPort uint16, identity string) *Scanner {
 		identity:    identity,
 		control:     vens.NewControlSession(host, controlPort),
 	}
+}
+
+// SetRotate180 configures host-side rotation for subsequent scan sessions.
+func (s *Scanner) SetRotate180(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rotate180 = enabled
 }
 
 // Online returns whether the scanner session is active (thread-safe).
@@ -170,6 +178,9 @@ func (s *Scanner) Connect(ctx context.Context) error {
 // StartScan begins a lazy scan session. Pages are pulled one at a time via
 // ScanSession.NextPage, allowing the client to stop after any page.
 func (s *Scanner) StartScan(cfg vens.ScanConfig) (*vens.ScanSession, error) {
+	s.mu.Lock()
+	cfg.Rotate180 = s.rotate180
+	s.mu.Unlock()
 	if !s.Online() {
 		return nil, fmt.Errorf("scanner not connected")
 	}
@@ -180,6 +191,9 @@ func (s *Scanner) StartScan(cfg vens.ScanConfig) (*vens.ScanSession, error) {
 
 // Scan executes a scan with the given config and returns pages.
 func (s *Scanner) Scan(cfg vens.ScanConfig, onPage func(vens.Page)) ([]vens.Page, error) {
+	s.mu.Lock()
+	cfg.Rotate180 = s.rotate180
+	s.mu.Unlock()
 	if !s.Online() {
 		return nil, fmt.Errorf("scanner not connected")
 	}

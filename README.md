@@ -167,6 +167,7 @@ AIRSCAP_PASSWORD=0700 AIRSCAP_SCANNER_IP=192.168.1.100 ./airscap
 | `AIRSCAP_LISTEN_PORT` | `8080` | HTTP リッスンポート | |
 | `AIRSCAP_DEVICE_NAME` | スキャナから取得 | mDNS 表示名 | |
 | `AIRSCAP_LOG_LEVEL` | `info` | ログレベル（`debug` / `info` / `warn` / `error`） | |
+| `AIRSCAP_ROTATE_180` | `false` | 全ページを 180° 回転（両面スキャンの表裏ともに適用） | |
 | `AIRSCAP_DATA_DIR` | 永続化しない | 設定永続化ディレクトリ | \*\* |
 | `AIRSCAP_OCR_MODEL_DIR` | &mdash; | OCR モデルディレクトリのパス | \*\*\* |
 | `AIRSCAP_OCR_DEVICE` | `cpu` | OCR 推論デバイス（`cpu` / `cuda`） | |
@@ -176,6 +177,16 @@ AIRSCAP_PASSWORD=0700 AIRSCAP_SCANNER_IP=192.168.1.100 ./airscap
 \*\*\* 指定すると OCR エンジンが有効になり、PDF 出力時に透明テキストレイヤーを追加できます。ONNX Runtime と ndlocr-lite モデルファイルが必要です。
 
 テンプレートは [`dist/env.example`](dist/env.example) を参照。
+
+`AIRSCAP_ROTATE_180=true` を指定すると、eSCL、Web UI プレビュー、PDF・OCR、
+ボタンによる保存の全経路で表裏の画像を 180° 回転します（自動方向判定ではありません）。
+変更後は再起動が必要です。Go の `strconv.ParseBool` と同じ真偽値を受け付け、
+未指定・空文字は無効、不正な値は警告を出して無効にします。無効時は画像を加工しません。
+JPEG は品質 95 で再圧縮されるため、画質やファイルサイズが変わる可能性があります。
+白黒 TIFF は画素を損失なく回転し、CCITT G4 ではなく 8 ビットグレースケールの
+Deflate TIFF として保存します。解像度・画像寸法・ページ順序は維持されますが、
+TIFF の補助タグは解像度以外コピーしません。詳細と実機での確認手順は
+[英語版の Scan orientation](README.en.md#scan-orientation) を参照してください。
 
 ## 動作確認
 
@@ -303,4 +314,3 @@ AirScap は **VENS** プロトコルを実装しています。これは富士�
 | [Alpine.js](https://alpinejs.dev/) | MIT |
 | [Bulma](https://bulma.io/) | MIT |
 | [Feather Icons](https://feathericons.com/) | MIT |
-

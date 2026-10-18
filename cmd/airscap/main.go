@@ -40,6 +40,7 @@ func main() {
 	listenPort := envInt("AIRSCAP_LISTEN_PORT", 8080)
 	deviceName := os.Getenv("AIRSCAP_DEVICE_NAME")
 	dataDir := envStr("AIRSCAP_DATA_DIR", os.Getenv("STATE_DIRECTORY"))
+	rotate180 := envBool("AIRSCAP_ROTATE_180", false)
 
 	// Resolve password
 	if password == "" && passwordFile != "" {
@@ -84,6 +85,7 @@ func main() {
 
 	// Create and connect scanner
 	sc := scanner.New(scannerIP, vens.DefaultDataPort, vens.DefaultControlPort, identity)
+	sc.SetRotate180(rotate180)
 	if err := sc.Connect(ctx); err != nil {
 		slog.Warn("initial scanner connection failed, will retry in background", "err", err)
 	}
@@ -361,6 +363,16 @@ func envInt(key string, fallback int) int {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
+	}
+	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+		slog.Warn("invalid boolean environment variable, using default", "key", key, "value", v, "default", fallback)
 	}
 	return fallback
 }
